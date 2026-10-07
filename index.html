@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shaadi Card – Digital Wedding Invitation Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,700;1,500&family=Jost:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* THEMES: change colours here. Each theme is just a set of CSS variables. */
+:root,[data-theme=royal]{--bg:#f7efe1;--ink:#3a1420;--accent:#7b1e32;--gold:#b8893b;--card:#fffaf0}
+[data-theme=floral]{--bg:#fbe9ec;--ink:#4a2a35;--accent:#c4607a;--gold:#8aa27c;--card:#fff6f7}
+[data-theme=emerald]{--bg:#0f2a24;--ink:#f3e6c4;--accent:#d9b25f;--gold:#d9b25f;--card:#16382f}
+[data-theme=minimal]{--bg:#f4f4f2;--ink:#222;--accent:#222;--gold:#999;--card:#fff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.6 Jost,sans-serif;min-height:100vh}
+h1,h2,h3{font-family:'Cormorant Garamond',serif;font-weight:700;line-height:1.1;margin:.3em 0}
+h1{font-size:clamp(2.4rem,9vw,4.5rem)}h2{font-size:clamp(1.8rem,6vw,2.6rem)}
+.wrap{max-width:960px;margin:auto;padding:20px}
+.card{background:var(--card);border:1px solid var(--gold);outline:1px solid var(--gold);outline-offset:-7px;border-radius:18px;padding:28px;margin:16px 0}
+button,.btn{font:500 1rem Jost;background:var(--accent);color:var(--card);border:0;border-radius:40px;padding:12px 26px;cursor:pointer;text-decoration:none;display:inline-block;margin:4px 4px 4px 0;transition:transform .2s}
+button:hover,.btn:hover{transform:translateY(-2px)}
+button.ghost,.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+label{display:block;font-size:.9rem;margin:12px 0 4px}
+input,select,textarea{width:100%;padding:11px 14px;border:1px solid var(--gold);border-radius:10px;background:transparent;color:var(--ink);font:inherit}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 16px}
+.err{color:#c0392b;font-size:.9rem;min-height:1.2em;margin-top:8px}
+.center{text-align:center}
+.bar{height:6px;background:#0002;border-radius:9px;overflow:hidden;margin:10px 0}.bar i{display:block;height:100%;background:var(--gold);transition:width .4s}
+.ev{border-left:3px solid var(--gold);padding:4px 0 4px 16px;margin:18px 0}
+.ev b{font:700 1.4rem 'Cormorant Garamond',serif;color:var(--accent)}
+.cd{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.cd div{min-width:72px;padding:12px;border:1px solid var(--gold);border-radius:12px}.cd b{font:700 2rem 'Cormorant Garamond',serif;display:block}
+.hero{padding:70px 0 30px;text-align:center}
+.names{font:italic 500 clamp(2.4rem,11vw,5rem) 'Cormorant Garamond',serif;color:var(--accent)}
+.stage{animation:rise .8s ease both}@keyframes rise{from{opacity:0;transform:translateY(24px)}}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{padding:8px;border-bottom:1px solid #0002;text-align:left}
+.stat b{font:700 2rem 'Cormorant Garamond',serif;display:block;color:var(--accent)}
+.split{display:grid;gap:16px}@media(min-width:800px){.split{grid-template-columns:1.4fr 1fr}.sticky{position:sticky;top:12px;align-self:start}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head><body>
+<div id="app" class="wrap"></div>
+<script>
+/* ===== 1. STATE & STORAGE ===== */
+const KEY='weddingInvitationDraft';
+const TRAD={Hindu:['Haldi','Mehendi','Sangeet','Wedding','Reception'],Muslim:['Engagement','Mehendi','Nikah','Walima'],Christian:['Engagement','Bridal Shower','Wedding Ceremony','Reception'],Sikh:['Roka','Mehendi','Anand Karaj','Reception'],Buddhist:['Wedding Ceremony','Reception'],Jain:['Wedding','Reception'],Custom:['Wedding']};
+const THEMES={royal:'Royal Wedding',floral:'Floral',emerald:'Luxury Emerald & Gold',minimal:'Minimal'};
+const fresh=()=>({religion:'Hindu',theme:'royal',bride:{},groom:{},date:'',events:[],loc:{},
+ msg:'With the blessings of our families, we are delighted to invite you to celebrate the wedding of',wa:'',food:'Vegetarian, Non-Vegetarian, Vegan'});
+let D=JSON.parse(localStorage.getItem(KEY)||'null')||fresh(), step=0, timer;
+D.gallery??=[];
+const save=()=>localStorage.setItem(KEY,JSON.stringify(D));
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $=s=>document.querySelector(s);
+const fmt=d=>d?new Date(d+'T00:00').toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'}):'';
+const sorted=()=>[...D.events].sort((a,b)=>(a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
+const wa=(num,text)=>`https://wa.me/${String(num||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`;
+const mapBtn=(u,t='Open in Google Maps')=>u?`<a class="btn ghost" target="_blank" rel="noopener" href="${esc(u)}">📍 ${t}</a>`:'';
+function setPath(p,v){const k=p.split('.');let o=D;while(k.length>1)o=o[k.shift()]??={};o[k[0]]=v;save();$('#pv')&&($('#pv').innerHTML=preview())}
+const bind=(p,v)=>`value="${esc(v)}" oninput="setPath('${p}',this.value)"`;
+
+/* ===== PHOTO HELPERS: shrink images in the browser so LocalStorage doesn't fill up ===== */
+function shrink(file,max){return new Promise(res=>{const r=new FileReader();r.onload=()=>{const i=new Image();i.onload=()=>{const k=Math.min(1,max/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',.7))};i.src=r.result};r.readAsDataURL(file)})}
+async function pick(w,f){if(!f[0])return;D[w].photo=await shrink(f[0],600);try{save()}catch(e){alert('Browser storage is full.')}creator()}
+async function addPics(f){for(const x of [...f].slice(0,8-D.gallery.length))D.gallery.push(await shrink(x,800));try{save()}catch(e){D.gallery.pop();alert('Browser storage is full. Remove a photo first.')}creator()}
+const photoBox=w=>`<div style="display:flex;gap:12px;align-items:center;margin:8px 0">${D[w].photo?`<img src="${D[w].photo}" alt="${w} photo" style="width:84px;height:84px;object-fit:cover;border-radius:50%;border:2px solid var(--gold)">`:'<div style="width:84px;height:84px;border-radius:50%;border:2px dashed var(--gold);display:grid;place-items:center">📷</div>'}<div><label class="btn ghost" style="margin:0 4px 0 0;cursor:pointer">${D[w].photo?'Change photo':'Choose photo'}<input type="file" accept="image/*" hidden onchange="pick('${w}',this.files)"></label>${D[w].photo?`<button class="ghost" onclick="D['${w}'].photo='';save();creator()">Remove</button>`:''}</div></div>`;
+const galleryBox=()=>`<h3>Photo gallery (up to 8)</h3><label class="btn ghost" style="cursor:pointer">+ Add photos<input type="file" accept="image/*" multiple hidden onchange="addPics(this.files)"></label>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px">${D.gallery.map((p,i)=>`<div style="position:relative"><img src="${p}" alt="Gallery photo ${i+1}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px"><button aria-label="Delete photo" onclick="D.gallery.splice(${i},1);save();creator()" style="position:absolute;top:2px;right:2px;padding:0 9px;margin:0">×</button></div>`).join('')}</div>`;
+function lb(i){const n=G.gallery.length,o=document.createElement('div');o.style.cssText='position:fixed;inset:0;background:#000d;display:grid;place-items:center;z-index:9;padding:12px';
+ o.innerHTML=`<img alt="Wedding photo" style="max-width:100%;max-height:88vh;border-radius:10px"><button style="position:absolute;top:12px;right:12px">Close ✕</button>`;
+ const im=o.querySelector('img');im.src=G.gallery[i];im.onclick=e=>{e.stopPropagation();i=(i+1)%n;im.src=G.gallery[i]};o.onclick=()=>o.remove();document.body.append(o)}
+
+/* ===== 2. ROUTER ===== */
+function route(){clearInterval(timer);document.body.dataset.theme=D.theme;
+ const h=location.hash||'#/';
+ if(h.startsWith('#/invite/')){try{G=JSON.parse(decodeURIComponent(escape(atob(h.slice(9)))));try{const f=localStorage.getItem('weddingInvitation_'+G.id);if(f)G=JSON.parse(f)}catch(e){}gStep=0;document.body.dataset.theme=G.theme;return guest()}catch(e){$('#app').innerHTML='<div class="card center"><h2>Invalid link</h2><p>This invitation link is damaged. Ask the host to send it again.</p></div>';return}}
+ if(h==='#/create')return creator();
+ if(h==='#/dashboard')return dashboard();
+ landing()}
+addEventListener('hashchange',route);
+
+/* ===== 3. LANDING ===== */
+function landing(){$('#app').innerHTML=`<section class="hero stage"><p>Digital wedding invitations</p>
+<h1>Create Your Perfect Digital Wedding Invitation</h1>
+<p>Design a beautiful wedding invitation, share it with your loved ones, and easily manage your guest responses.</p>
+<a class="btn" href="#/create">Create Invitation</a><button class="ghost" onclick="demo()">View Demo Invitation</button>
+<a class="btn ghost" href="#/dashboard">RSVP Dashboard</a></section>
+<div class="card"><h2 class="center">How it works</h2><div class="grid3">
+${['Create your invitation','Add wedding events','Personalize your story','Generate your link','Share with guests','Receive RSVP responses'].map((t,i)=>`<div><span class="names" style="font-size:2.4rem">${i+1}</span><br>${t}</div>`).join('')}</div></div>
+<p class="center"><small>Privacy: information entered in this demo is stored locally in your browser.</small></p>`}
+function demo(){D={...fresh(),bride:{name:'Ayesha',parents:'Mr. & Mrs. Khan',intro:'Kind, curious and always laughing.'},groom:{name:'Rahul',parents:'Mr. & Mrs. Das',intro:'Calm, caring and a great cook.'},
+ date:new Date(Date.now()+68*864e5).toISOString().slice(0,10),wa:'919999999999',events:[{name:'Mehendi',date:new Date(Date.now()+67*864e5).toISOString().slice(0,10),time:'16:00',venue:'Family Residence',map:''},{name:'Wedding',date:new Date(Date.now()+68*864e5).toISOString().slice(0,10),time:'11:00',venue:'Grand Palace Hall',map:''}],loc:{venue:'Grand Palace Hall',addr:'MG Road, Kolkata',map:'https://maps.google.com'}};
+ save();step=5;location.hash='#/create'}
+
+/* ===== 4. CREATOR (multi-step wizard) ===== */
+const STEPS=['Tradition','Couple','Events','Venue & Message','Design & RSVP','Generate'];
+function creator(){const pct=Math.round((step+1)/STEPS.length*100);
+ $('#app').innerHTML=`<a href="#/">← Home</a><h2>${STEPS[step]} <small>(${pct}%)</small></h2><div class="bar"><i style="width:${pct}%"></i></div>
+<div class="split"><div class="card stage">${panel()}<div class="err" id="err"></div>
+${step>0?'<button class="ghost" onclick="go(-1)">Back</button>':''}${step<5?'<button onclick="go(1)">Save & Continue</button>':''}</div>
+<div class="sticky"><div class="card center" id="pv">${preview()}</div></div></div>`}
+function preview(){return `<small>Live preview</small><br>${['bride','groom'].map(w=>D[w].photo?`<img src="${D[w].photo}" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;margin:4px">`:'').join('')}<div class="names">${esc(D.bride.name||'Bride')} & ${esc(D.groom.name||'Groom')}</div><p>${fmt(D.date)||'Wedding date'}</p><small>${THEMES[D.theme]} · ${D.events.length} events</small>`}
+function panel(){
+ if(step===0)return `<label>Choose your wedding tradition</label><select onchange="D.religion=this.value;save();D.events.length||0;creator()">${Object.keys(TRAD).map(r=>`<option ${r===D.religion?'selected':''}>${r}</option>`).join('')}</select>
+ <p><small>Every family is different — you can rename, remove or add any event in the next steps.</small></p>`;
+ if(step===1)return ['bride','groom'].map(w=>`<h3>${w[0].toUpperCase()+w.slice(1)}</h3>${photoBox(w)}<label>Full name *</label><input ${bind(w+'.name',D[w].name)}>
+ <div class="row"><div><label>Parents' names</label><input ${bind(w+'.parents',D[w].parents)}></div><div><label>Instagram (optional)</label><input ${bind(w+'.insta',D[w].insta)}></div></div>
+ <label>Short introduction</label><textarea rows="2" ${bind(w+'.intro',D[w].intro).replace('value="'+esc(D[w].intro)+'"','')}>${esc(D[w].intro)}</textarea>`).join('')+
+ `<label>Main wedding date *</label><input type="date" ${bind('date',D.date)}>`;
+ if(step===2)return `<button class="ghost" onclick="suggest()">Use ${D.religion} suggestions</button><button class="ghost" onclick="addEv()">+ Add Custom Event</button>`+
+ D.events.map((e,i)=>`<div class="ev"><div class="row"><div><label>Event name</label><input ${bind('events.'+i+'.name',e.name)}></div><div><label>Date</label><input type="date" ${bind('events.'+i+'.date',e.date)}></div>
+ <div><label>Time</label><input type="time" ${bind('events.'+i+'.time',e.time)}></div><div><label>Venue</label><input ${bind('events.'+i+'.venue',e.venue)}></div></div>
+ <label>Google Maps link</label><input ${bind('events.'+i+'.map',e.map)}><button class="ghost" onclick="D.events.splice(${i},1);save();creator()">Remove</button></div>`).join('');
+ if(step===3)return `<h3>Main venue</h3><label>Venue name</label><input ${bind('loc.venue',D.loc.venue)}><label>Address</label><input ${bind('loc.addr',D.loc.addr)}><label>Google Maps link</label><input ${bind('loc.map',D.loc.map)}>
+ <h3>Invitation message</h3><textarea rows="3" oninput="setPath('msg',this.value)">${esc(D.msg)}</textarea>`+galleryBox();
+ if(step===4)return `<label>Theme</label><select onchange="D.theme=this.value;save();document.body.dataset.theme=this.value">${Object.entries(THEMES).map(([k,v])=>`<option value="${k}" ${k===D.theme?'selected':''}>${v}</option>`).join('')}</select>
+ <label>Your WhatsApp number (with country code) *</label><input type="tel" placeholder="919876543210" ${bind('wa',D.wa)}>
+ <label>Food options (comma separated)</label><input ${bind('food',D.food)}>`;
+ return `<h3>Your invitation is ready</h3><p>${esc(D.bride.name)} & ${esc(D.groom.name)} · ${fmt(D.date)}</p><button onclick="publish()">Generate Invitation</button><div id="out"></div>
+ <p><small>Photos: guests see them only when they open the link on this same browser. A short link cannot carry images; sharing photos to other phones needs image hosting or a backend.</small><br><small>Demo note: the link carries the invitation inside the URL. True public, cross-device storage of RSVPs needs a backend/database.</small></p>`}
+function suggest(){TRAD[D.religion].forEach(n=>D.events.push({name:n,date:'',time:'',venue:'',map:''}));save();creator()}
+function addEv(){D.events.push({name:'',date:'',time:'',venue:'',map:''});save();creator()}
+function go(n){const e=n>0&&validate(step);if(e){$('#err').textContent=e;return}step+=n;creator()}
+function validate(s){
+ if(s===1&&!(D.bride.name&&D.groom.name&&D.date))return'Please enter the bride name, groom name and wedding date.';
+ if(s===2&&(!D.events.length||D.events.some(e=>!e.name||!e.date)))return'Add at least one event, and give every event a name and date.';
+ if(s===4&&String(D.wa).replace(/\D/g,'').length<10)return'Enter a valid WhatsApp number with country code.';return''}
+function publish(){const e=[1,2,4].map(validate).find(Boolean);if(e){$('#out').innerHTML=`<div class="err">${e}</div>`;return}
+ const id=`WED-${D.date.slice(0,4)}-${(D.bride.name[0]+D.groom.name[0]).toUpperCase()}-${Math.floor(1000+Math.random()*9000)}`;
+ const data={...D,id};localStorage.setItem('weddingInvitation_'+id,JSON.stringify(data));localStorage.setItem('weddingLastId',id);
+ const link=location.href.split('#')[0]+'#/invite/'+btoa(unescape(encodeURIComponent(JSON.stringify({...data,gallery:[],bride:{...D.bride,photo:''},groom:{...D.groom,photo:''}}))));
+ const msg=`💍 You're Invited! ❤️\n\nWe are delighted to invite you to celebrate the wedding of ${D.bride.name} & ${D.groom.name}.\n\n📅 Wedding Date: ${fmt(D.date)}\n\nPlease open your digital invitation here:\n\n${link}\n\nWe would be honored to celebrate this special day with you. ❤️`;
+ window.LINK=link;$('#out').innerHTML=`<h3>Invitation ID: ${id}</h3><input readonly value="${esc(link)}" onclick="this.select()">
+ <button onclick="copyLink()">Copy Link</button><a class="btn" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(msg)}">Share on WhatsApp</a>
+ <a class="btn ghost" target="_blank" rel="noopener" href="https://t.me/share/url?url=${encodeURIComponent(link)}">Telegram</a><a class="btn ghost" href="mailto:?subject=${encodeURIComponent("You're invited!")}&body=${encodeURIComponent(msg)}">Email</a>
+ <a class="btn ghost" href="${esc(link)}">Open as guest</a><a class="btn ghost" href="#/dashboard">Dashboard</a>`}
+function copyLink(){navigator.clipboard.writeText(LINK).then(()=>alert('Link copied!'),()=>prompt('Copy this link:',LINK))}
+
+/* ===== 5. GUEST EXPERIENCE ===== */
+let G,gStep=0,R=null;
+const SCREENS=['open','bride','groom','invite','events','place','photos','rsvp','done'];
+function guest(){clearInterval(timer);const s=SCREENS[gStep],nav=(gStep>0&&s!=='done'?'<button class="ghost" onclick="gs(-1)">← Back</button>':'')+(!['rsvp','done'].includes(s)?`<button onclick="gs(1)">${s==='open'?'Open Invitation ❤️':'Next →'}</button>`:'');
+ const person=(w,t)=>`<div class="card center stage"><h2>${t}</h2>${G[w].photo?`<img src="${G[w].photo}" alt="${esc(G[w].name)}" style="width:170px;height:170px;object-fit:cover;border-radius:50%;border:3px solid var(--gold)">`:''}<div class="names">${esc(G[w].name)}</div><p>${G[w].parents?'Son/daughter of '+esc(G[w].parents):''}</p><p>${esc(G[w].intro)}</p></div>`;
+ const V={
+ open:`<div class="hero stage"><p>You are cordially invited</p><div class="names">${esc(G.bride.name)}<br>&<br>${esc(G.groom.name)}</div><p>Wedding Invitation</p></div>`,
+ bride:person('bride','Meet the Bride'),groom:person('groom','Meet the Groom'),
+ invite:`<div class="card center stage"><h2>Together with their families</h2><p>${esc(G.msg)}</p><div class="names">${esc(G.bride.name)} & ${esc(G.groom.name)}</div><h3>${fmt(G.date)}</h3><div class="cd" id="cd"></div></div>`,
+ events:`<div class="card stage"><h2>Wedding events</h2>${[...G.events].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).map(e=>`<div class="ev"><small>${fmt(e.date)}${e.time?' · '+e.time:''}</small><br><b>${esc(e.name)}</b><br>${esc(e.venue)}<br>${mapBtn(e.map,'Get Directions')}</div>`).join('')}</div>`,
+ place:`<div class="card center stage"><h2>Location</h2><h3>${esc(G.loc.venue||'Wedding venue')}</h3><p>${esc(G.loc.addr)}</p>${mapBtn(G.loc.map)||'<p>The host has not added a map link.</p>'}</div>`,
+ photos:`<div class="card center stage"><h2>Photo memories</h2><p><small>Tap a photo to enlarge it; tap again for the next one.</small></p><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">${(G.gallery||[]).map((p,i)=>`<img src="${p}" loading="lazy" tabindex="0" role="button" alt="Wedding photo ${i+1}" onclick="lb(${i})" onkeydown="if(event.key==='Enter')lb(${i})" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;cursor:pointer">`).join('')}</div></div>`,
+ rsvp:`<div class="card stage"><h2>Will you join us?</h2><label>Your name *</label><input id="rn"><label>Attending? *</label>
+ <select id="ra" onchange="$('#rc').hidden=this.value!=='yes'"><option value="">Choose…</option><option value="yes">❤️ Yes, I'll be there</option><option value="no">Sorry, I can't attend</option></select>
+ <div id="rc" hidden><label>How many people are coming? *</label><input id="rp" type="number" min="1" max="20" value="1"><label>Food preference *</label>
+ <select id="rf">${G.food.split(',').map(f=>`<option>${esc(f.trim())}</option>`).join('')}</select></div>
+ <div class="row"><div><label>Phone</label><input id="rph" type="tel"></div><div><label>Relationship</label><input id="rr"></div></div>
+ <label>Message to the couple</label><textarea id="rm" rows="2"></textarea>
+ <label style="display:flex;gap:8px"><input id="rok" type="checkbox" style="width:auto"> I confirm the information is correct.</label>
+ <div class="err" id="err"></div><button onclick="sendRsvp()">Submit RSVP ❤️</button></div>`,
+ done:`<div class="card center stage"><h2>Thank you, ${esc(R?.name)}! ❤️</h2><p>Your response has been received.</p><p>${R?.attend==='yes'?"We can't wait to celebrate with you!":"We're sorry you won't be able to join us, but thank you for letting us know."}</p>
+ <a class="btn" target="_blank" rel="noopener" href="${wa(G.wa,R?.text)}">Send RSVP to WhatsApp</a><button class="ghost" onclick="gStep=0;guest()">Back to Invitation</button></div>`};
+ $('#app').innerHTML=V[s]+`<div class="center">${nav}</div>`;
+ if(s==='invite'){const t=()=>{let d=Math.max(0,new Date(G.date+'T00:00')-Date.now());const c=$('#cd');if(!c)return;
+  c.innerHTML=d<=0&&Date.now()>new Date(G.date+'T23:59')?'<h3>The Celebration Has Begun ❤️</h3>':[['Days',864e5],['Hours',36e5],['Minutes',6e4],['Seconds',1e3]].map(([n,m])=>{const v=Math.floor(d/m);d-=v*m;return`<div><b>${v}</b>${n}</div>`}).join('')};t();timer=setInterval(t,1000)}}
+function gs(n){do{gStep+=n}while(SCREENS[gStep]==='photos'&&!(G.gallery||[]).length);guest();scrollTo(0,0)}
+function sendRsvp(){const g=id=>$('#'+id).value.trim(),yes=g('ra')==='yes',
+ e=!g('rn')?'Please enter your name.':!g('ra')?'Please tell us if you are attending.':!$('#rok').checked?'Please tick the confirmation box.':yes&&(+g('rp')<1)?'Enter how many people are coming.':'';
+ if(e){$('#err').textContent=e;return}
+ R={name:g('rn'),attend:g('ra'),people:yes?+g('rp'):0,food:yes?g('rf'):'-',phone:g('rph'),rel:g('rr'),msg:g('rm'),date:new Date().toISOString()};
+ R.text=`💌 New Wedding RSVP\n\nGuest Name: ${R.name}\nAttendance: ${yes?'✅ Coming':'❌ Not coming'}\nNumber of Guests: ${R.people}\nFood Preference: ${R.food}\nRelationship: ${R.rel||'-'}\n\nMessage:\n${R.msg||'-'}\n\nInvitation: ${G.id}`;
+ const k='weddingRSVP_'+G.id,l=JSON.parse(localStorage.getItem(k)||'[]');l.push(R);localStorage.setItem(k,JSON.stringify(l));gStep=SCREENS.indexOf('done');guest()}
+
+/* ===== 6. DASHBOARD ===== */
+function dashboard(){const id=localStorage.getItem('weddingLastId');
+ if(!id){$('#app').innerHTML='<a href="#/">← Home</a><div class="card center"><h2>No invitation yet</h2><a class="btn" href="#/create">Create Invitation</a></div>';return}
+ const l=JSON.parse(localStorage.getItem('weddingRSVP_'+id)||'[]'),yes=l.filter(r=>r.attend==='yes'),sum=f=>yes.filter(f).reduce((a,r)=>a+r.people,0);
+ $('#app').innerHTML=`<a href="#/">← Home</a><h2>RSVP Dashboard</h2><small>${id} · RSVPs are saved in this browser only (demo).</small>
+ <div class="grid3">${[['Responses',l.length],['Attending',yes.length],['Not attending',l.length-yes.length],['Total guests',sum(()=>1)],['Vegetarian',sum(r=>/^veg/i.test(r.food)&&!/non/i.test(r.food))],['Non-veg',sum(r=>/non/i.test(r.food))]].map(([n,v])=>`<div class="card stat center"><b>${v}</b>${n}</div>`).join('')}</div>
+ <div class="card" style="overflow:auto"><table><tr><th>Guest<th>Status<th>People<th>Food<th>Message<th></tr>${l.map((r,i)=>`<tr><td>${esc(r.name)}<td>${r.attend==='yes'?'Yes':'No'}<td>${r.people}<td>${esc(r.food)}<td>${esc(r.msg)}<td><a href="${wa(r.phone,'Thank you for your RSVP, '+r.name+'!')}" target="_blank" rel="noopener">WhatsApp</a> <a href="#" onclick="delR('${id}',${i});return false">Delete</a></tr>`).join('')||'<tr><td colspan=6>No responses yet.</tr>'}</table>
+ <button onclick="csv('${id}')">Export Guest List (CSV)</button></div>`}
+function delR(id,i){const l=JSON.parse(localStorage.getItem('weddingRSVP_'+id));l.splice(i,1);localStorage.setItem('weddingRSVP_'+id,JSON.stringify(l));dashboard()}
+function csv(id){const l=JSON.parse(localStorage.getItem('weddingRSVP_'+id)||'[]'),q=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+ const rows=[['Guest Name','Attendance','Number of Guests','Food Preference','Phone','Relationship','Message','Submission Date'],...l.map(r=>[r.name,r.attend,r.people,r.food,r.phone,r.rel,r.msg,r.date])];
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([rows.map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv'}));a.download='guest-list.csv';a.click()}
+route();
+</script></body></html>
